@@ -64,8 +64,8 @@ static const char *REQUEST = "POST /igdupnp/control/WANCommonIFC1 HTTP/1.1\n"
                              "            </s:Body>\n"
                              "        </s:Envelope>";
 
-double bandwidth = 0;
-long totalBytesReceived = 0;
+uint32_t bandwidth = 0;
+uint32_t totalBytesReceived = 0;
 
 void getValue() {
 
@@ -155,33 +155,36 @@ void getValue() {
         char totalBytesArray[11];
         bzero(totalBytesArray, sizeof(totalBytesArray));
         int counter = 0;
-        for (int i = 505; i < 515; i++) {
+        for (int i = 505; i < 514; i++) {
 
             totalBytesArray[counter] = recv_buf[i];
+            //ESP_LOGI(TAG, "recv_buf: %c", recv_buf[i]);
+            ESP_LOGI(TAG, "totalBytesArray: %c", totalBytesArray[counter]);
             counter++;
         }
 
         // converting char array to base 10
         char *ptr;
-        long newTotalBytesReceived = strtol(totalBytesArray, &ptr, 10);
-        long bytesDelta = newTotalBytesReceived - totalBytesReceived;
-        //  ESP_LOGI(TAG, "tried to read number %li", totalBytesReceived);
-        // ESP_LOGI(TAG, "bytesDelta %li", bytesDelta);
+        uint32_t newTotalBytesReceived = strtol(totalBytesArray, &ptr, 10);
+        ESP_LOGI(TAG, "tried to read number %i", newTotalBytesReceived);
+
+        uint32_t bytesDelta = newTotalBytesReceived - totalBytesReceived;
+        ESP_LOGI(TAG, "bytesDelta %i", bytesDelta);
 
         totalBytesReceived = newTotalBytesReceived;
 
         TickType_t currentCount = xTaskGetTickCount();
         uint32_t timeDelta = (currentCount - lastInvocation) / configTICK_RATE_HZ;
-        //ESP_LOGI(TAG, "timeDelta %d with rate %i Hz", timeDelta, configTICK_RATE_HZ);
+        ESP_LOGI(TAG, "timeDelta %d with rate %i Hz", timeDelta, configTICK_RATE_HZ);
 
 
         bandwidth = bytesDelta / timeDelta;
-        //ESP_LOGI(TAG, "calculated bandwidth %f", bandwidth);
+        ESP_LOGI(TAG, "calculated bandwidth %i", bandwidth);
 
 
         lastInvocation = currentCount;
 
-        //vTaskDelay(1000 / portTICK_RATE_MS);
+        vTaskDelay(1000 / portTICK_RATE_MS);
     }
 
 }
@@ -196,15 +199,18 @@ void setMeter() {
     while (true) {
         targetVoltage = bandwidth / verhaeltnis;
 
+
         if (intermediateVoltage < targetVoltage) {
             intermediateVoltage++;
         } else if (intermediateVoltage > targetVoltage) {
             intermediateVoltage--;
         }
 
-        ESP_LOGI(TAG, " %i -> %i", intermediateVoltage, targetVoltage);
-        ESP_ERROR_CHECK(dac_output_voltage(DAC_CHANNEL_1, intermediateVoltage));
-        vTaskDelay(25 / portTICK_RATE_MS);
+        if (intermediateVoltage != targetVoltage) {
+            ESP_LOGI(TAG, " %i Byte/s -> %i Vi -> %i Vi", bandwidth, intermediateVoltage, targetVoltage);
+            ESP_ERROR_CHECK(dac_output_voltage(DAC_CHANNEL_1, intermediateVoltage));
+            vTaskDelay(33 / portTICK_RATE_MS);
+        }
 
     }
 }

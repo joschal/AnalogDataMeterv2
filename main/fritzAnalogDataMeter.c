@@ -1,11 +1,18 @@
-/* Blink Example
+/*
+    This program is free software: you can redistribute it and/or modify
+    it under the terms of the GNU General Public License as published by
+    the Free Software Foundation, either version 3 of the License, or
+    (at your option) any later version.
 
-   This example code is in the Public Domain (or CC0 licensed, at your option.)
+    This program is distributed in the hope that it will be useful,
+    but WITHOUT ANY WARRANTY; without even the implied warranty of
+    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+    GNU General Public License for more details.
 
-   Unless required by applicable law or agreed to in writing, this
-   software is distributed on an "AS IS" BASIS, WITHOUT WARRANTIES OR
-   CONDITIONS OF ANY KIND, either express or implied.
+    You should have received a copy of the GNU General Public License
+    along with this program.  If not, see <https://www.gnu.org/licenses/>.
 */
+
 #include <stdio.h>
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
@@ -31,8 +38,9 @@
 
 
 /* Constants that aren't configurable in menuconfig */
-#define WEB_SERVER "fritz.box"
-#define WEB_PORT "49000"
+#define WEB_SERVER 		"fritz.box"
+#define WEB_PORT 		"49000"
+#define MAX_INTERNET_BANDWIDTH	100000
 
 static const char *TAG = "example";
 
@@ -47,7 +55,7 @@ static const char *REQUEST = "POST /igdupnp/control/WANCommonIFC1 HTTP/1.1\n"
                              "Host: 10.0.1.1:49000\n"
                              "Accept-Encoding: gzip, deflate\n"
                              "Content-Length: 436\n"
-                             "Connection: keep-alive\n"
+                             "Connection: close\n"
                              "cache-control: no-cache\n"
                              "\n"
                              "    <?xml\n"
@@ -141,9 +149,10 @@ void getValue() {
         bzero(recv_buf, sizeof(recv_buf));
         do {
             r = read(s, recv_buf, sizeof(recv_buf) - 1);
+            /*
             for (int i = 0; i < r; i++) {
                 putchar(recv_buf[i]);
-            }
+            }*/
         } while (r > 0);
 
         ESP_LOGI(TAG, "... done reading from socket. Last read return=%d errno=%d.", r, errno);
@@ -155,7 +164,7 @@ void getValue() {
         char totalBytesArray[11];
         bzero(totalBytesArray, sizeof(totalBytesArray));
         int counter = 0;
-        for (int i = 505; i < 514; i++) {
+        for (int i = 501; i < 510; i++) {
 
             totalBytesArray[counter] = recv_buf[i];
             //ESP_LOGI(TAG, "recv_buf: %c", recv_buf[i]);
@@ -174,8 +183,8 @@ void getValue() {
         totalBytesReceived = newTotalBytesReceived;
 
         TickType_t currentCount = xTaskGetTickCount();
-        uint32_t timeDelta = (currentCount - lastInvocation) / configTICK_RATE_HZ;
-        ESP_LOGI(TAG, "timeDelta %d with rate %i Hz", timeDelta, configTICK_RATE_HZ);
+        float timeDelta = (currentCount - lastInvocation) / configTICK_RATE_HZ;
+        ESP_LOGI(TAG, "timeDelta %f with rate %i Hz", timeDelta, configTICK_RATE_HZ);
 
 
         bandwidth = bytesDelta / timeDelta;
@@ -184,7 +193,7 @@ void getValue() {
 
         lastInvocation = currentCount;
 
-        vTaskDelay(1000 / portTICK_RATE_MS);
+        vTaskDelay(2500 / portTICK_RATE_MS);
     }
 
 }
@@ -193,12 +202,11 @@ void setMeter() {
 
     ESP_ERROR_CHECK(dac_output_enable(DAC_CHANNEL_1));
 
-    uint8_t verhaeltnis = 50000 / 255;
+    uint8_t verhaeltnis = MAX_INTERNET_BANDWIDTH / 255;
     uint8_t targetVoltage = 0;
     uint8_t intermediateVoltage = 0;
     while (true) {
         targetVoltage = bandwidth / verhaeltnis;
-
 
         if (intermediateVoltage < targetVoltage) {
             intermediateVoltage++;
@@ -211,7 +219,6 @@ void setMeter() {
             ESP_ERROR_CHECK(dac_output_voltage(DAC_CHANNEL_1, intermediateVoltage));
             vTaskDelay(33 / portTICK_RATE_MS);
         }
-
     }
 }
 
